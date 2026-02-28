@@ -5,7 +5,8 @@ on:
     # Runs every day at 10am Eastern (15:00 UTC)
     - cron: "0 15 * * *"
   workflow_dispatch:
-  permissions:
+
+permissions:
   contents: write
 
 jobs:
