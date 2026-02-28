@@ -1,6 +1,8 @@
 name: Update NHL Line Combos
 
 on:
+permissions:
+  contents: write
   schedule:
     # Runs every day at 10am Eastern (15:00 UTC)
     - cron: "0 15 * * *"
