@@ -1,1 +1,161 @@
-{}
+{
+  "source": "dailyfaceoff.com",
+  "updated_at": "2026-02-28 22:48:17 UTC",
+  "teams": {
+    "anaheim-ducks": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "boston-bruins": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "buffalo-sabres": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "calgary-flames": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "carolina-hurricanes": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "chicago-blackhawks": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "colorado-avalanche": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "columbus-blue-jackets": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "dallas-stars": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "detroit-red-wings": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "edmonton-oilers": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "florida-panthers": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "los-angeles-kings": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "minnesota-wild": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "montreal-canadiens": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "nashville-predators": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "new-jersey-devils": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "new-york-islanders": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "new-york-rangers": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "ottawa-senators": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "philadelphia-flyers": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "pittsburgh-penguins": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "san-jose-sharks": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "seattle-kraken": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "st-louis-blues": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "tampa-bay-lightning": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "toronto-maple-leafs": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "vancouver-canucks": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "vegas-golden-knights": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "washington-capitals": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
+    "winnipeg-jets": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    }
+  }
+}
