@@ -7,17 +7,16 @@ BASE_URL = "https://www.dailyfaceoff.com/teams/{team}/line-combinations"
 OUTPUT_PATH = "data/lines.json"
 
 TEAMS = [
-    "anaheim-ducks", "arizona-coyotes", "boston-bruins", "buffalo-sabres",
-    "calgary-flames", "carolina-hurricanes", "chicago-blackhawks",
-    "colorado-avalanche", "columbus-blue-jackets", "dallas-stars",
-    "detroit-red-wings", "edmonton-oilers", "florida-panthers",
-    "los-angeles-kings", "minnesota-wild", "montreal-canadiens",
-    "nashville-predators", "new-jersey-devils", "new-york-islanders",
-    "new-york-rangers", "ottawa-senators", "philadelphia-flyers",
-    "pittsburgh-penguins", "san-jose-sharks", "seattle-kraken",
-    "st-louis-blues", "tampa-bay-lightning", "toronto-maple-leafs",
-    "vancouver-canucks", "vegas-golden-knights", "washington-capitals",
-    "winnipeg-jets",
+    "anaheim-ducks", "boston-bruins", "buffalo-sabres", "calgary-flames",
+    "carolina-hurricanes", "chicago-blackhawks", "colorado-avalanche",
+    "columbus-blue-jackets", "dallas-stars", "detroit-red-wings",
+    "edmonton-oilers", "florida-panthers", "los-angeles-kings",
+    "minnesota-wild", "montreal-canadiens", "nashville-predators",
+    "new-jersey-devils", "new-york-islanders", "new-york-rangers",
+    "ottawa-senators", "philadelphia-flyers", "pittsburgh-penguins",
+    "san-jose-sharks", "seattle-kraken", "st-louis-blues",
+    "tampa-bay-lightning", "toronto-maple-leafs", "vancouver-canucks",
+    "vegas-golden-knights", "washington-capitals", "winnipeg-jets",
 ]
 
 HEADERS = {
@@ -27,10 +26,10 @@ HEADERS = {
 
 def scrape_team(team_slug):
     url = BASE_URL.format(team=team_slug)
-    response = requests.get(url, headers=HEADERS, timeout=15)
-    response.raise_for_status()
+    res = requests.get(url, headers=HEADERS, timeout=15)
+    res.raise_for_status()
 
-    soup = BeautifulSoup(response.text, "lxml")
+    soup = BeautifulSoup(res.text, "lxml")
 
     team_data = {
         "forwards": [],
@@ -38,23 +37,29 @@ def scrape_team(team_slug):
         "goalies": []
     }
 
-    sections = soup.select(".line-combination")
+    sections = soup.find_all("h2")
 
-    for section in sections:
-        title = section.select_one(".line-combination__title")
-        players = [p.get_text(strip=True) for p in section.select(".player-name")]
+    for header in sections:
+        title = header.get_text(strip=True).lower()
+        table = header.find_next("table")
 
-        if not title or not players:
+        if not table:
             continue
 
-        title_text = title.get_text(strip=True).lower()
+        rows = table.find_all("tr")
 
-        if "line" in title_text:
-            team_data["forwards"].append(players)
-        elif "pair" in title_text:
-            team_data["defense"].append(players)
-        elif "goalie" in title_text:
-            team_data["goalies"].append(players)
+        for row in rows:
+            players = [a.get_text(strip=True) for a in row.find_all("a")]
+
+            if not players:
+                continue
+
+            if "line" in title:
+                team_data["forwards"].append(players)
+            elif "pair" in title:
+                team_data["defense"].append(players)
+            elif "goalie" in title:
+                team_data["goalies"].append(players)
 
     return team_data
 
@@ -68,16 +73,14 @@ def main():
 
     for team in TEAMS:
         try:
-            print(f"Scraping {team}...")
+            print(f"Scraping {team}")
             all_data["teams"][team] = scrape_team(team)
-            time.sleep(0.5)  # be polite
+            time.sleep(0.5)
         except Exception as e:
-            print(f"Failed to scrape {team}: {e}")
+            print(f"Failed {team}: {e}")
 
     with open(OUTPUT_PATH, "w") as f:
         json.dump(all_data, f, indent=2)
-
-    print("Done.")
 
 
 if __name__ == "__main__":
