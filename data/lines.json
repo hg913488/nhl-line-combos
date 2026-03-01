@@ -1,6 +1,6 @@
 {
   "source": "dailyfaceoff.com",
-  "updated_at": "2026-03-01 15:44:24 UTC",
+  "updated_at": "2026-03-01 16:48:34 UTC",
   "teams": {
     "anaheim-ducks": {
       "forwards": [],
@@ -13,7 +13,34 @@
       "goalies": []
     },
     "buffalo-sabres": {
-      "forwards": [],
+      "forwards": [
+        [
+          "PEYTON KREBS",
+          "TAGE THOMPSON",
+          "ALEX TUCH",
+          "JASON ZUCKER",
+          "RYAN MCLEOD",
+          "JACK QUINN",
+          "NOAH OSTLUND",
+          "JOSH NORRIS",
+          "JOSH DOAN",
+          "ZACH BENSON",
+          "TYSON KOZAK",
+          "BECK MALENSTYN",
+          "MATTIAS SAMUELSSON",
+          "RASMUS DAHLIN",
+          "BOWEN BYRAM",
+          "OWEN POWER",
+          "ZACH METSA",
+          "MICHAEL KESSELRING",
+          "UKKO-PEKKA LUUKKONEN",
+          "ALEX LYON",
+          "CONOR TIMMINS",
+          "JORDAN GREENWAY",
+          "JIRI KULICH",
+          "JUSTIN DANFORTH"
+        ]
+      ],
       "defense": [],
       "goalies": []
     },
@@ -88,7 +115,34 @@
       "goalies": []
     },
     "new-york-islanders": {
-      "forwards": [],
+      "forwards": [
+        [
+          "ONDREJ PALAT",
+          "BO HORVAT",
+          "MATHEW BARZAL",
+          "JONATHAN DROUIN",
+          "CALUM RITCHIE",
+          "EMIL HEINEMAN",
+          "ANDERS LEE",
+          "JEAN-GABRIEL PAGEAU",
+          "SIMON HOLMSTROM",
+          "KYLE MACLEAN",
+          "CASEY CIZIKAS",
+          "MARC GATCOMB",
+          "MATTHEW SCHAEFER",
+          "RYAN PULOCK",
+          "ADAM PELECH",
+          "TONY DEANGELO",
+          "CARSON SOUCY",
+          "SCOTT MAYFIELD",
+          "DAVID RITTICH",
+          "ILYA SOROKIN",
+          "SEMYON VARLAMOV",
+          "PIERRE ENGVALL",
+          "ALEXANDER ROMANOV",
+          "KYLE PALMIERI"
+        ]
+      ],
       "defense": [],
       "goalies": []
     },
@@ -137,6 +191,11 @@
       "defense": [],
       "goalies": []
     },
+    "utah-mammoth": {
+      "forwards": [],
+      "defense": [],
+      "goalies": []
+    },
     "vancouver-canucks": {
       "forwards": [],
       "defense": [],
@@ -148,7 +207,32 @@
       "goalies": []
     },
     "washington-capitals": {
-      "forwards": [],
+      "forwards": [
+        [
+          "ALEX OVECHKIN",
+          "DYLAN STROME",
+          "ANTHONY BEAUVILLIER",
+          "ALIAKSEI PROTAS",
+          "PIERRE-LUC DUBOIS",
+          "TOM WILSON",
+          "CONNOR MCMICHAEL",
+          "JUSTIN SOURDIF",
+          "RYAN LEONARD",
+          "BRANDON DUHAIME",
+          "NIC DOWD",
+          "ETHEN FRANK",
+          "MARTIN FEHERVARY",
+          "RASMUS SANDIN",
+          "JAKOB CHYCHRUN",
+          "MATT ROY",
+          "DECLAN CHISHOLM",
+          "TREVOR VAN RIEMSDYK",
+          "CHARLIE LINDGREN",
+          "LOGAN THOMPSON",
+          "JOHN CARLSON",
+          "SONNY MILANO"
+        ]
+      ],
       "defense": [],
       "goalies": []
     },
