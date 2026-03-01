@@ -127,11 +127,11 @@ def main():
     }
 
     with sync_playwright() as p:
-        browser = p.firefox.launch(headless=True)
+        browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) "
-                "Gecko/20100101 Firefox/124.0"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
             ),
             viewport={"width": 1440, "height": 900},
             locale="en-US",
