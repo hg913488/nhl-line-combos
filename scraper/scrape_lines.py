@@ -1,6 +1,5 @@
 import json
 import time
-import re
 from playwright.sync_api import sync_playwright
 
 OUTPUT_PATH = "data/lines.json"
@@ -22,105 +21,92 @@ TEAMS = [
 
 def scrape_team(page, team_slug):
     url = f"https://www.dailyfaceoff.com/teams/{team_slug}/line-combinations"
-    page.goto(url, wait_until="networkidle", timeout=30000)
+    page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
-    # Use JS to walk the rendered DOM and extract line sections by heading + row structure
+    # Wait for the line combo grid to appear
+    try:
+        page.wait_for_selector("div.w-1\\/3", timeout=8000)
+    except Exception:
+        pass
+    page.wait_for_timeout(1500)
+
     result = page.evaluate("""() => {
         const out = { forwards: [], defense: [], goalies: [] };
 
-        // Daily Faceoff renders sections with a heading then a table/grid of lines.
-        // Each ROW in that grid = one line (3 forwards) or one pair (2 D) or goalie.
-        // We find all headings, determine type, then grab rows of player links below them.
+        // Player name is in a div with class containing "text-center"
+        // that is a child of a flex-row container (one row = one line/pair)
+        // Each player card: div.w-1/3.text-center > a[href*="/players/"] > img + div(name)
 
-        function getPlayersInRow(rowEl) {
-            const links = rowEl.querySelectorAll('a');
-            const players = [];
-            for (const a of links) {
-                const href = a.getAttribute('href') || '';
-                const text = (a.innerText || a.textContent || '').trim();
-                // Only count actual player links (not nav/team links)
-                if (text && text.length > 2 && text.length < 40 &&
-                    (href.includes('/players/') || href.includes('/player/'))) {
-                    players.push(text.toUpperCase());
-                }
-            }
-            return players;
+        function getPlayerName(card) {
+            // Name is usually the last text node or a div after the image
+            const a = card.querySelector('a[href*="/players/"]');
+            if (!a) return null;
+            // Get all text inside the anchor, skip image alt text
+            const clone = a.cloneNode(true);
+            // Remove img tags
+            clone.querySelectorAll('img').forEach(i => i.remove());
+            const text = clone.innerText || clone.textContent || '';
+            const name = text.trim().replace(/\\s+/g, ' ');
+            return name.length > 1 ? name.toUpperCase() : null;
         }
 
-        function extractSectionLines(startEl) {
-            // Walk siblings after the heading to find the first table/grid
-            let el = startEl.nextElementSibling;
-            let depth = 0;
-            while (el && depth < 8) {
-                // Check this element and its children for rows of player links
-                const rows = el.querySelectorAll('tr');
-                if (rows.length > 0) {
-                    const lines = [];
-                    for (const row of rows) {
-                        const players = getPlayersInRow(row);
-                        if (players.length >= 1) lines.push(players);
-                    }
-                    if (lines.length > 0) return lines;
-                }
+        // Find all flex-row line containers
+        // From the DOM: div.mb-4.flex.flex-row.flex-wrap.justify-evenly.border-b
+        // Each contains player cards (div.w-1/3 or similar)
+        const lineRows = document.querySelectorAll(
+            'div[class*="flex-row"][class*="justify-evenly"], ' +
+            'div[class*="flex-row"][class*="justify-center"], ' +
+            'div[class*="flex-row"][class*="border-b"]'
+        );
 
-                // No table rows — check for div/flex rows (player cards in a row)
-                // Look for children that each contain a player link
-                const children = Array.from(el.children);
-                if (children.length >= 2) {
-                    // Check if children are "cells" (each containing one player)
-                    const playerCells = children.filter(c => c.querySelector('a'));
-                    if (playerCells.length >= 2) {
-                        // This might be one line laid out as flex children
-                        const players = [];
-                        for (const cell of playerCells) {
-                            const links = cell.querySelectorAll('a');
-                            for (const a of links) {
-                                const href = a.getAttribute('href') || '';
-                                const text = (a.innerText || a.textContent || '').trim();
-                                if (text && text.length > 2 && text.length < 40 &&
-                                    (href.includes('/players/') || href.includes('/player/'))) {
-                                    players.push(text.toUpperCase());
-                                    break; // one player per cell
-                                }
-                            }
-                        }
-                        if (players.length >= 2) return [players];
-                    }
-                }
+        // Track what section we're in by walking through headings and line rows in DOM order
+        // Get all relevant elements in document order
+        const allEls = Array.from(document.querySelectorAll(
+            'h2, h3, h4, div[class*="flex-row"][class*="justify-evenly"], div[class*="flex-row"][class*="border-b"]'
+        ));
 
-                // If we hit another heading, stop
-                if (['H1','H2','H3','H4'].includes(el.tagName)) break;
-                el = el.nextElementSibling;
-                depth++;
-            }
-            return [];
-        }
-
-        // Find all headings and section containers
-        const allEls = document.querySelectorAll('h1,h2,h3,h4,[class*="title"],[class*="Title"],[class*="header"],[class*="Header"],[class*="section"],[class*="Section"]');
+        let currentSection = 'forwards'; // default
 
         for (const el of allEls) {
-            const text = (el.innerText || el.textContent || '').toLowerCase().trim();
-            if (!text || text.length > 80) continue;
+            if (['H2','H3','H4'].includes(el.tagName)) {
+                const text = (el.innerText || el.textContent || '').toLowerCase();
+                if (text.includes('forward') || text.includes('line')) currentSection = 'forwards';
+                else if (text.includes('defensive') || text.includes('pair') || text.includes('defense')) currentSection = 'defense';
+                else if (text.includes('goalie') || text.includes('starter') || text.includes('backup')) currentSection = 'goalies';
+                continue;
+            }
 
-            let type = null;
-            if (/\\bline\\b/.test(text) && !text.includes('blue line') && !text.includes('goal line')) type = 'forwards';
-            else if (/\\bpair\\b/.test(text) || text.includes('defense') || text.includes('defence')) type = 'defense';
-            else if (text.includes('goalie') || text.includes('starter') || text.includes('backup')) type = 'goalies';
+            // It's a flex row — extract player cards from it
+            // Cards are children that contain a player link
+            const cards = el.querySelectorAll('div[class*="w-1"]');
+            const players = [];
 
-            if (!type) continue;
+            for (const card of cards) {
+                const name = getPlayerName(card);
+                if (name && name.length > 2) players.push(name);
+            }
 
-            const lines = extractSectionLines(el);
-            if (lines.length > 0) {
-                out[type].push(...lines);
+            // Filter: forwards rows have 3 players, defense pairs have 2, goalies have 1-2
+            if (players.length >= 1) {
+                if (currentSection === 'forwards' && players.length >= 2) {
+                    out.forwards.push(players);
+                } else if (currentSection === 'defense' && players.length >= 1) {
+                    out.defense.push(players);
+                } else if (currentSection === 'goalies') {
+                    out.goalies.push(players);
+                } else if (players.length >= 3) {
+                    out.forwards.push(players);
+                } else if (players.length === 2) {
+                    out.defense.push(players);
+                }
             }
         }
 
-        // Dedupe: remove exact duplicate lines
+        // Dedupe
         for (const key of ['forwards', 'defense', 'goalies']) {
             const seen = new Set();
             out[key] = out[key].filter(line => {
-                const sig = line.join('|');
+                const sig = JSON.stringify(line);
                 if (seen.has(sig)) return false;
                 seen.add(sig);
                 return true;
@@ -130,47 +116,7 @@ def scrape_team(page, team_slug):
         return out;
     }""")
 
-    # If JS extraction got nothing, fall back to regex on page text
-    if not any([result["forwards"], result["defense"], result["goalies"]]):
-        print(f"  JS extraction empty for {team_slug}, trying text regex fallback...")
-        result = text_fallback(page)
-
     return result
-
-
-def text_fallback(page):
-    """Parse line structure from visible page text using LINE/PAIR/GOALIE markers."""
-    out = {"forwards": [], "defense": [], "goalies": []}
-    try:
-        text = page.inner_text("body")
-        # Split on section markers
-        pattern = re.compile(
-            r'(LINE\s*\d+|PAIR\s*\d+|DEFENSIVE\s*PAIR\s*\d+|GOALIE\s*STARTER|GOALIE\s*BACKUP|STARTING\s*GOALIE|BACKUP\s*GOALIE)',
-            re.IGNORECASE
-        )
-        parts = pattern.split(text)
-        current_type = None
-        for i, part in enumerate(parts):
-            lower = part.strip().lower()
-            if re.search(r'line\s*\d', lower):
-                current_type = "forwards"
-            elif re.search(r'pair\s*\d|defensive', lower):
-                current_type = "defense"
-            elif "goalie" in lower or "starter" in lower or "backup" in lower:
-                current_type = "goalies"
-            elif current_type and i > 0:
-                # Extract proper names: Title Case or ALL CAPS multi-word
-                names = re.findall(
-                    r'\b[A-Z][a-zA-Z\'\-\.]+(?:[\s\-][A-Z][a-zA-Z\'\-\.]+)+\b',
-                    part
-                )
-                names = [n.upper() for n in names if 2 < len(n) < 40][:4]
-                if names:
-                    out[current_type].append(names)
-                current_type = None
-    except Exception as e:
-        print(f"  Text fallback error: {e}")
-    return out
 
 
 def main():
@@ -181,29 +127,41 @@ def main():
     }
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.firefox.launch(headless=True)
         context = browser.new_context(
             user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) "
+                "Gecko/20100101 Firefox/124.0"
             ),
-            viewport={"width": 1280, "height": 900},
+            viewport={"width": 1440, "height": 900},
+            locale="en-US",
+            timezone_id="America/New_York",
+        )
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
         )
         page = context.new_page()
 
+        # Warm up with homepage visit for cookies
+        print("Warming up session on dailyfaceoff.com...")
+        try:
+            page.goto("https://www.dailyfaceoff.com", wait_until="domcontentloaded", timeout=20000)
+            page.wait_for_timeout(2000)
+        except Exception as e:
+            print(f"  Warmup warning: {e}")
+
         for team in TEAMS:
             try:
-                print(f"\nScraping {team}...")
+                print(f"Scraping {team}...")
                 data = scrape_team(page, team)
                 all_data["teams"][team] = data
 
-                fwd_lines = len(data["forwards"])
-                def_pairs = len(data["defense"])
-                goalies = len(data["goalies"])
-                print(f"  → {fwd_lines} fwd lines, {def_pairs} def pairs, {goalies} goalies")
+                fwd = len(data["forwards"])
+                dfn = len(data["defense"])
+                gol = len(data["goalies"])
+                print(f"  → {fwd} fwd lines, {dfn} def pairs, {gol} goalies")
 
-                time.sleep(1.5)
+                time.sleep(2)
 
             except Exception as e:
                 print(f"  FAILED {team}: {e}")
@@ -215,7 +173,7 @@ def main():
         json.dump(all_data, f, indent=2)
 
     populated = sum(1 for t in all_data["teams"].values() if t["forwards"])
-    print(f"\n✓ Done — {populated}/{len(TEAMS)} teams have forward data.")
+    print(f"\nDone — {populated}/{len(TEAMS)} teams have forward data.")
     print(f"Written to {OUTPUT_PATH}")
 
 
