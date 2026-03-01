@@ -1,6 +1,7 @@
 import json
 import time
-from playwright.sync_api import sync_playwright
+import requests
+from bs4 import BeautifulSoup
 
 OUTPUT_PATH = "data/lines.json"
 
@@ -18,105 +19,53 @@ TEAMS = [
     "winnipeg-jets",
 ]
 
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+}
 
-def scrape_team(page, team_slug):
+SESSION = requests.Session()
+SESSION.headers.update(HEADERS)
+
+
+def scrape_team(team_slug):
     url = f"https://www.dailyfaceoff.com/teams/{team_slug}/line-combinations"
-    page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    resp = SESSION.get(url, timeout=15)
+    resp.raise_for_status()
 
-    # Wait for the line combo grid to appear
-    try:
-        page.wait_for_selector("div.w-1\\/3", timeout=8000)
-    except Exception:
-        pass
-    page.wait_for_timeout(1500)
+    soup = BeautifulSoup(resp.text, "html.parser")
+    script = soup.find("script", id="__NEXT_DATA__")
+    if not script:
+        return {"forwards": [], "defense": [], "goalies": []}
 
-    result = page.evaluate("""() => {
-        const out = { forwards: [], defense: [], goalies: [] };
+    data = json.loads(script.string)
+    players = (
+        data.get("props", {})
+            .get("pageProps", {})
+            .get("combinations", {})
+            .get("players", [])
+    )
 
-        // Player name is in a div with class containing "text-center"
-        // that is a child of a flex-row container (one row = one line/pair)
-        // Each player card: div.w-1/3.text-center > a[href*="/players/"] > img + div(name)
+    # Group players by groupIdentifier, only even strength
+    groups = {}
+    for p in players:
+        if p.get("categoryIdentifier") != "ev":
+            continue
+        group = p.get("groupIdentifier", "")
+        if group not in groups:
+            groups[group] = []
+        groups[group].append(p.get("name", "").upper())
 
-        function getPlayerName(card) {
-            // Name is usually the last text node or a div after the image
-            const a = card.querySelector('a[href*="/players/"]');
-            if (!a) return null;
-            // Get all text inside the anchor, skip image alt text
-            const clone = a.cloneNode(true);
-            // Remove img tags
-            clone.querySelectorAll('img').forEach(i => i.remove());
-            const text = clone.innerText || clone.textContent || '';
-            const name = text.trim().replace(/\\s+/g, ' ');
-            return name.length > 1 ? name.toUpperCase() : null;
-        }
+    forwards = [groups[k] for k in ["f1", "f2", "f3", "f4"] if k in groups and groups[k]]
+    defense = [groups[k] for k in ["d1", "d2", "d3"] if k in groups and groups[k]]
+    goalies = [[p] for p in groups.get("g", [])]
 
-        // Find all flex-row line containers
-        // From the DOM: div.mb-4.flex.flex-row.flex-wrap.justify-evenly.border-b
-        // Each contains player cards (div.w-1/3 or similar)
-        const lineRows = document.querySelectorAll(
-            'div[class*="flex-row"][class*="justify-evenly"], ' +
-            'div[class*="flex-row"][class*="justify-center"], ' +
-            'div[class*="flex-row"][class*="border-b"]'
-        );
-
-        // Track what section we're in by walking through headings and line rows in DOM order
-        // Get all relevant elements in document order
-        const allEls = Array.from(document.querySelectorAll(
-            'h2, h3, h4, div[class*="flex-row"][class*="justify-evenly"], div[class*="flex-row"][class*="border-b"]'
-        ));
-
-        let currentSection = 'forwards'; // default
-
-        for (const el of allEls) {
-            if (['H2','H3','H4'].includes(el.tagName)) {
-                const text = (el.innerText || el.textContent || '').toLowerCase();
-                if (text.includes('forward') || text.includes('line')) currentSection = 'forwards';
-                else if (text.includes('defensive') || text.includes('pair') || text.includes('defense')) currentSection = 'defense';
-                else if (text.includes('goalie') || text.includes('starter') || text.includes('backup')) currentSection = 'goalies';
-                continue;
-            }
-
-            // It's a flex row — extract player cards from it
-            // Cards are children that contain a player link
-            const cards = el.querySelectorAll('div[class*="w-1"]');
-            const players = [];
-
-            for (const card of cards) {
-                const name = getPlayerName(card);
-                if (name && name.length > 2) players.push(name);
-            }
-
-            // Filter: forwards rows have 3 players, defense pairs have 2, goalies have 1-2
-            if (players.length >= 1) {
-                if (currentSection === 'forwards' && players.length >= 2) {
-                    out.forwards.push(players);
-                } else if (currentSection === 'defense' && players.length >= 1) {
-                    out.defense.push(players);
-                } else if (currentSection === 'goalies') {
-                    out.goalies.push(players);
-                } else if (players.length >= 3) {
-                    out.forwards.push(players);
-                } else if (players.length === 2) {
-                    out.defense.push(players);
-                }
-            }
-        }
-
-        // Dedupe
-        for (const key of ['forwards', 'defense', 'goalies']) {
-            const seen = new Set();
-            out[key] = out[key].filter(line => {
-                const sig = JSON.stringify(line);
-                if (seen.has(sig)) return false;
-                seen.add(sig);
-                return true;
-            });
-        }
-
-        return out;
-    }""")
-
-    return result
+    return {"forwards": forwards, "defense": defense, "goalies": goalies}
 
 
 def main():
@@ -126,55 +75,25 @@ def main():
         "teams": {}
     }
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1440, "height": 900},
-            locale="en-US",
-            timezone_id="America/New_York",
-        )
-        context.add_init_script(
-            "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
-        )
-        page = context.new_page()
-
-        # Warm up with homepage visit for cookies
-        print("Warming up session on dailyfaceoff.com...")
+    for team in TEAMS:
         try:
-            page.goto("https://www.dailyfaceoff.com", wait_until="domcontentloaded", timeout=20000)
-            page.wait_for_timeout(2000)
+            print(f"Scraping {team}...")
+            data = scrape_team(team)
+            all_data["teams"][team] = data
+            fwd = len(data["forwards"])
+            dfn = len(data["defense"])
+            gol = len(data["goalies"])
+            print(f"  -> {fwd} fwd lines, {dfn} def pairs, {gol} goalies")
+            time.sleep(1)
         except Exception as e:
-            print(f"  Warmup warning: {e}")
-
-        for team in TEAMS:
-            try:
-                print(f"Scraping {team}...")
-                data = scrape_team(page, team)
-                all_data["teams"][team] = data
-
-                fwd = len(data["forwards"])
-                dfn = len(data["defense"])
-                gol = len(data["goalies"])
-                print(f"  → {fwd} fwd lines, {dfn} def pairs, {gol} goalies")
-
-                time.sleep(2)
-
-            except Exception as e:
-                print(f"  FAILED {team}: {e}")
-                all_data["teams"][team] = {"forwards": [], "defense": [], "goalies": []}
-
-        browser.close()
+            print(f"  FAILED {team}: {e}")
+            all_data["teams"][team] = {"forwards": [], "defense": [], "goalies": []}
 
     with open(OUTPUT_PATH, "w") as f:
         json.dump(all_data, f, indent=2)
 
     populated = sum(1 for t in all_data["teams"].values() if t["forwards"])
-    print(f"\nDone — {populated}/{len(TEAMS)} teams have forward data.")
-    print(f"Written to {OUTPUT_PATH}")
+    print(f"\nDone - {populated}/{len(TEAMS)} teams have forward data.")
 
 
 if __name__ == "__main__":
