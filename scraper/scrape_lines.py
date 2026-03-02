@@ -37,11 +37,10 @@ def scrape_team(team_slug):
     url = f"https://www.dailyfaceoff.com/teams/{team_slug}/line-combinations"
     resp = SESSION.get(url, timeout=15)
     resp.raise_for_status()
-
     soup = BeautifulSoup(resp.text, "html.parser")
     script = soup.find("script", id="__NEXT_DATA__")
     if not script:
-        return {"forwards": [], "defense": [], "goalies": []}
+        return {"forwards": [], "defense": [], "goalies": [], "pp1": [], "pp2": []}
 
     data = json.loads(script.string)
     players = (
@@ -51,28 +50,49 @@ def scrape_team(team_slug):
             .get("players", [])
     )
 
-    # Group players by groupIdentifier, only even strength
-    groups = {}
+    # Even strength groups
+    ev_groups = {}
+    # Power play groups
+    pp_groups = {}
+
     for p in players:
-        if p.get("categoryIdentifier") != "ev":
-            continue
+        category = p.get("categoryIdentifier", "")
         group = p.get("groupIdentifier", "")
-        if group not in groups:
-            groups[group] = []
-        groups[group].append(p.get("name", "").upper())
+        name = p.get("name", "").upper()
 
-    forwards = [groups[k] for k in ["f1", "f2", "f3", "f4"] if k in groups and groups[k]]
-    defense = [groups[k] for k in ["d1", "d2", "d3"] if k in groups and groups[k]]
-    goalies = [[p] for p in groups.get("g", [])]
+        if category == "ev":
+            if group not in ev_groups:
+                ev_groups[group] = []
+            ev_groups[group].append(name)
 
-    return {"forwards": forwards, "defense": defense, "goalies": goalies}
+        elif category == "pp":
+            if group not in pp_groups:
+                pp_groups[group] = []
+            pp_groups[group].append(name)
+
+    forwards = [ev_groups[k] for k in ["f1", "f2", "f3", "f4"] if k in ev_groups and ev_groups[k]]
+    defense  = [ev_groups[k] for k in ["d1", "d2", "d3"]       if k in ev_groups and ev_groups[k]]
+    goalies  = [[p] for p in ev_groups.get("g", [])]
+
+    # PP units — Daily Faceoff uses groupIdentifier "f1"/"d1" within pp category
+    # so we collect all pp players in order as one flat unit per pp line
+    pp1 = pp_groups.get("f1", []) + pp_groups.get("d1", [])
+    pp2 = pp_groups.get("f2", []) + pp_groups.get("d2", [])
+
+    return {
+        "forwards": forwards,
+        "defense":  defense,
+        "goalies":  goalies,
+        "pp1":      pp1,
+        "pp2":      pp2,
+    }
 
 
 def main():
     all_data = {
-        "source": "dailyfaceoff.com",
+        "source":     "dailyfaceoff.com",
         "updated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-        "teams": {}
+        "teams":      {}
     }
 
     for team in TEAMS:
@@ -80,17 +100,16 @@ def main():
             print(f"Scraping {team}...")
             data = scrape_team(team)
             all_data["teams"][team] = data
-            fwd = len(data["forwards"])
-            dfn = len(data["defense"])
-            gol = len(data["goalies"])
-            print(f"  -> {fwd} fwd lines, {dfn} def pairs, {gol} goalies")
+            print(f"  -> {len(data['forwards'])} fwd lines, {len(data['defense'])} def pairs, "
+                  f"{len(data['goalies'])} goalies, "
+                  f"PP1: {len(data['pp1'])} players, PP2: {len(data['pp2'])} players")
             time.sleep(1)
         except Exception as e:
             print(f"  FAILED {team}: {e}")
-            all_data["teams"][team] = {"forwards": [], "defense": [], "goalies": []}
+            all_data["teams"][team] = {"forwards": [], "defense": [], "goalies": [], "pp1": [], "pp2": []}
 
-    with open(OUTPUT_PATH, "w") as f:
-        json.dump(all_data, f, indent=2)
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(all_data, f, indent=2, ensure_ascii=False)
 
     populated = sum(1 for t in all_data["teams"].values() if t["forwards"])
     print(f"\nDone - {populated}/{len(TEAMS)} teams have forward data.")
