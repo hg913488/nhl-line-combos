@@ -1,0 +1,38 @@
+name: Update NHL Line Combos
+
+on:
+  schedule:
+    - cron: '0 14 * * *'  # runs daily at 9am ET (14:00 UTC)
+  workflow_dispatch:        # allows manual trigger from GitHub Actions tab
+
+jobs:
+  scrape-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout scraper repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scraper
+        run: python scraper/scrape_lines.py
+
+      - name: Push lines.json to app repo
+        env:
+          APP_REPO_TOKEN: ${{ secrets.APP_REPO_TOKEN }}
+        run: |
+          git clone https://x-access-token:${APP_REPO_TOKEN}@github.com/hg913488/nhl-line-combos-app.git app-repo
+          cp data/lines.json app-repo/data/lines.json
+          cd app-repo
+          git config user.email "scraper@bot"
+          git config user.name "Scraper Bot"
+          git add data/lines.json
+          git commit -m "Update lineups $(date +%F)" || echo "No changes to commit"
+          git push
