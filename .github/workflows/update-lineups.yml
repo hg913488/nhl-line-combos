@@ -29,6 +29,7 @@ jobs:
           APP_REPO_TOKEN: ${{ secrets.APP_REPO_TOKEN }}
         run: |
           git clone https://x-access-token:${APP_REPO_TOKEN}@github.com/hg913488/nhl-line-combos-app.git app-repo
+          mkdir -p app-repo/data
           cp data/lines.json app-repo/data/lines.json
           cd app-repo
           git config user.email "scraper@bot"
