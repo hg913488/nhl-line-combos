@@ -69,6 +69,7 @@ def scrape_team(team_slug):
             if group not in pp_groups:
                 pp_groups[group] = []
             pp_groups[group].append(name)
+            
 
     forwards = [ev_groups[k] for k in ["f1", "f2", "f3", "f4"] if k in ev_groups and ev_groups[k]]
     defense  = [ev_groups[k] for k in ["d1", "d2", "d3"]       if k in ev_groups and ev_groups[k]]
@@ -76,8 +77,8 @@ def scrape_team(team_slug):
 
     # PP units — Daily Faceoff uses groupIdentifier "f1"/"d1" within pp category
     # so we collect all pp players in order as one flat unit per pp line
-    pp1 = pp_groups.get("f1", []) + pp_groups.get("d1", [])
-    pp2 = pp_groups.get("f2", []) + pp_groups.get("d2", [])
+    pp1 = pp_groups.get("pp1", [])
+    pp2 = pp_groups.get("pp2", [])
 
     return {
         "forwards": forwards,
