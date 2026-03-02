@@ -1,6 +1,6 @@
 {
   "source": "dailyfaceoff.com",
-  "updated_at": "2026-03-01 19:58:05 UTC",
+  "updated_at": "2026-03-02 16:11:00 UTC",
   "teams": {
     "anaheim-ducks": {
       "forwards": [
@@ -15,14 +15,14 @@
           "BECKETT SENNECKE"
         ],
         [
-          "JANSEN HARKINS",
+          "ALEX KILLORN",
           "RYAN POEHLING",
-          "ALEX KILLORN"
+          "JANSEN HARKINS"
         ],
         [
           "ROSS JOHNSTON",
           "TIM WASHE",
-          "FRANK VATRANO"
+          "IAN MOORE"
         ]
       ],
       "defense": [
@@ -148,17 +148,17 @@
           "JOEL FARABEE"
         ],
         [
-          "YEGOR SHARANGOVICH",
+          "BLAKE COLEMAN",
           "MIKAEL BACKLUND",
           "MATT CORONATO"
         ],
         [
-          "BLAKE COLEMAN",
+          "YEGOR SHARANGOVICH",
           "MORGAN FROST",
           "MATVEI GRIDIN"
         ],
         [
-          "MARTIN POSPISIL",
+          "RYAN LOMBERG",
           "JOHN BEECHER",
           "ADAM KLAPKA"
         ]
@@ -174,7 +174,7 @@
         ],
         [
           "JOEL HANLEY",
-          "ZAYNE PAREKH"
+          "BRAYDEN PACHAL"
         ]
       ],
       "goalies": [
@@ -240,7 +240,7 @@
           "ANDRE BURAKOVSKY"
         ],
         [
-          "OLIVER MOORE",
+          "RYAN DONATO",
           "FRANK NAZAR",
           "TEUVO TERAVAINEN"
         ],
@@ -250,9 +250,9 @@
           "ILYA MIKHEYEV"
         ],
         [
-          "RYAN DONATO",
           "NICK FOLIGNO",
-          "COLTON DACH"
+          "OLIVER MOORE",
+          "LANDON SLAGGERT"
         ]
       ],
       "defense": [
@@ -271,10 +271,10 @@
       ],
       "goalies": [
         [
-          "ARVID SODERBLOM"
+          "SPENCER KNIGHT"
         ],
         [
-          "SPENCER KNIGHT"
+          "ARVID SODERBLOM"
         ]
       ]
     },
@@ -317,10 +317,10 @@
       ],
       "goalies": [
         [
-          "MACKENZIE BLACKWOOD"
+          "SCOTT WEDGEWOOD"
         ],
         [
-          "SCOTT WEDGEWOOD"
+          "MACKENZIE BLACKWOOD"
         ]
       ]
     },
@@ -455,10 +455,10 @@
       ],
       "goalies": [
         [
-          "CAM TALBOT"
+          "JOHN GIBSON"
         ],
         [
-          "JOHN GIBSON"
+          "CAM TALBOT"
         ]
       ]
     },
@@ -526,9 +526,9 @@
           "BRAD MARCHAND"
         ],
         [
-          "A.J. GREER",
-          "LUKE KUNIN",
-          "SANDIS VILMANIS"
+          "SANDIS VILMANIS",
+          "JESPER BOQVIST",
+          "A.J. GREER"
         ]
       ],
       "defense": [
@@ -593,9 +593,6 @@
       ],
       "goalies": [
         [
-          "DARCY KUEMPER"
-        ],
-        [
           "ANTON FORSBERG"
         ]
       ]
@@ -618,9 +615,9 @@
           "VLADIMIR TARASENKO"
         ],
         [
-          "MARCUS FOLIGNO",
+          "VINNIE HINOSTROZA",
           "NICO STURM",
-          "VINNIE HINOSTROZA"
+          "TYLER PITLICK"
         ]
       ],
       "defense": [
@@ -792,7 +789,7 @@
           "MATHEW BARZAL"
         ],
         [
-          "JONATHAN DROUIN",
+          "ANTHONY DUCLAIR",
           "CALUM RITCHIE",
           "EMIL HEINEMAN"
         ],
@@ -823,10 +820,10 @@
       ],
       "goalies": [
         [
-          "DAVID RITTICH"
+          "ILYA SOROKIN"
         ],
         [
-          "ILYA SOROKIN"
+          "DAVID RITTICH"
         ]
       ]
     },
@@ -845,10 +842,10 @@
         [
           "TYE KARTYE",
           "NOAH LABA",
-          "BRENDAN BRISSON"
+          "CONOR SHEARY"
         ],
         [
-          "CONOR SHEARY",
+          "BRENDAN BRISSON",
           "SAM CARRICK",
           "TAYLOR RADDYSH"
         ]
@@ -864,7 +861,7 @@
         ],
         [
           "MATTHEW ROBERTSON",
-          "SCOTT MORROW"
+          "VINCENT IORIO"
         ]
       ],
       "goalies": [
@@ -1099,34 +1096,34 @@
       ],
       "goalies": [
         [
-          "JOEY DACCORD"
+          "PHILIPP GRUBAUER"
         ],
         [
-          "PHILIPP GRUBAUER"
+          "JOEY DACCORD"
         ]
       ]
     },
     "st-louis-blues": {
       "forwards": [
         [
-          "PAVEL BUCHNEVICH",
+          "BRAYDEN SCHENN",
           "ROBERT THOMAS",
-          "JORDAN KYROU"
-        ],
-        [
-          "JAKE NEIGHBOURS",
-          "DALIBOR DVORSKY",
           "JIMMY SNUGGERUD"
         ],
         [
+          "JAKE NEIGHBOURS",
+          "PAVEL BUCHNEVICH",
+          "JORDAN KYROU"
+        ],
+        [
           "DYLAN HOLLOWAY",
-          "PIUS SUTER",
-          "BRAYDEN SCHENN"
+          "DALIBOR DVORSKY",
+          "PIUS SUTER"
         ],
         [
           "ALEXEY TOROPCHENKO",
           "JACK FINLEY",
-          "NATHAN WALKER"
+          "OSKAR SUNDQVIST"
         ]
       ],
       "defense": [
@@ -1236,10 +1233,10 @@
       ],
       "goalies": [
         [
-          "JOSEPH WOLL"
+          "ANTHONY STOLARZ"
         ],
         [
-          "ANTHONY STOLARZ"
+          "JOSEPH WOLL"
         ]
       ]
     },
