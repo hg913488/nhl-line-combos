@@ -2,7 +2,9 @@ name: Update NHL Line Combos
 
 on:
   schedule:
-    - cron: '0 14 * * *'  # runs daily at 9am ET (14:00 UTC)
+    - cron: '0 14 * * *'   # 9am ET  — overnight changes
+    - cron: '0 19 * * *'   # 2pm ET  — post-morning skate lines
+    - cron: '0 22 * * *'   # 5pm ET  — final check before games start
   workflow_dispatch:        # allows manual trigger from GitHub Actions tab
 
 jobs:
