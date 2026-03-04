@@ -115,63 +115,70 @@ def scrape_espn_injuries():
             resp.raise_for_status()
             data = resp.json()
 
-            # Debug: print raw response for first team so we can see the structure
-            if not debug_printed:
-                print(f"  DEBUG raw ESPN response for {slug}:")
-                print(f"  Keys: {list(data.keys())}")
-                items = data.get("items", [])
-                print(f"  Items count: {len(items)}")
-                if items:
-                    print(f"  First item keys: {list(items[0].keys())}")
-                    print(f"  First item: {json.dumps(items[0], indent=2)[:1000]}")
-                else:
-                    # Maybe the data is under a different key
-                    print(f"  Full response (first 1500 chars): {json.dumps(data)[:1500]}")
-                debug_printed = True
-
             team_injuries = []
             for item in data.get("items", []):
+                # Each item is a $ref link — follow it to get the full injury object
+                ref_url = item.get("$ref", "")
+                if not ref_url:
+                    continue
+
+                try:
+                    inj_resp = SESSION.get(ref_url, timeout=10)
+                    inj_data = inj_resp.json()
+                except Exception as e:
+                    print(f"    Failed to fetch injury ref for {slug}: {e}")
+                    continue
+
+                # Debug: print first injury object so we can see full structure
+                if not debug_printed:
+                    print(f"  DEBUG first injury object for {slug}:")
+                    print(f"  Keys: {list(inj_data.keys())}")
+                    print(f"  {json.dumps(inj_data, indent=2)[:2000]}")
+                    debug_printed = True
+
+                # Extract player name
                 player_name = ""
                 player_pos = ""
+                athlete = inj_data.get("athlete", {})
+                if isinstance(athlete, dict):
+                    if "$ref" in athlete:
+                        try:
+                            ath_resp = SESSION.get(athlete["$ref"], timeout=10)
+                            ath_data = ath_resp.json()
+                            player_name = ath_data.get("displayName", "")
+                            player_pos = ath_data.get("position", {}).get("abbreviation", "")
+                        except Exception:
+                            pass
+                    else:
+                        player_name = athlete.get("displayName", "")
+                        player_pos = athlete.get("position", {}).get("abbreviation", "")
+
+                # Extract status
                 status = ""
-                description = ""
-
-                # Get athlete info — follow $ref if needed
-                athlete = item.get("athlete", {})
-                if isinstance(athlete, dict) and "$ref" in athlete:
-                    try:
-                        ath_resp = SESSION.get(athlete["$ref"], timeout=10)
-                        ath_data = ath_resp.json()
-                        player_name = ath_data.get("displayName", "")
-                        player_pos = ath_data.get("position", {}).get("abbreviation", "")
-                    except Exception as e:
-                        print(f"    Failed to fetch athlete ref for {slug}: {e}")
-                elif isinstance(athlete, dict):
-                    player_name = athlete.get("displayName", "")
-                    player_pos = athlete.get("position", {}).get("abbreviation", "")
-
-                # Get injury status
-                status_obj = item.get("status", "")
+                status_obj = inj_data.get("status", "")
                 if isinstance(status_obj, str):
                     status = status_obj
                 elif isinstance(status_obj, dict):
-                    # Could be nested: status.type.description or status.description
                     status = (
                         status_obj.get("type", {}).get("description", "")
                         or status_obj.get("description", "")
                         or status_obj.get("name", "")
                     )
 
-                # Get injury description / type
-                inj_type = item.get("type", {})
+                # Extract injury description
+                description = ""
+                inj_type = inj_data.get("type", {})
                 if isinstance(inj_type, dict):
                     description = inj_type.get("description", "") or inj_type.get("name", "")
                 elif isinstance(inj_type, str):
                     description = inj_type
 
-                # Fallback: check for longComment or shortComment
                 if not description:
-                    description = item.get("longComment", "") or item.get("shortComment", "") or item.get("details", {}).get("detail", "") if isinstance(item.get("details"), dict) else ""
+                    description = (
+                        inj_data.get("longComment", "")
+                        or inj_data.get("shortComment", "")
+                        or inj_data.get("description", "")
+                    )
 
                 if player_name:
                     team_injuries.append({
@@ -180,6 +187,8 @@ def scrape_espn_injuries():
                         "status": status or "Unknown",
                         "desc": description or "",
                     })
+
+                time.sleep(0.1)
 
             if team_injuries:
                 injuries[slug] = team_injuries
