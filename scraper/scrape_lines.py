@@ -117,8 +117,6 @@ def scrape_espn_injuries():
 
             team_injuries = []
             for item in data.get("items", []):
-                # Each item may have nested $ref links or inline data
-                # Try inline first, then follow $ref if needed
                 player_name = ""
                 player_pos = ""
                 status = ""
