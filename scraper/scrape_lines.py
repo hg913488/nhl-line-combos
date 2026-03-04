@@ -19,6 +19,24 @@ TEAMS = [
     "winnipeg-jets",
 ]
 
+# ESPN team IDs mapped to our slugs
+ESPN_TEAM_IDS = {
+    "anaheim-ducks": 25, "boston-bruins": 1, "buffalo-sabres": 2,
+    "calgary-flames": 3, "carolina-hurricanes": 7, "chicago-blackhawks": 4,
+    "colorado-avalanche": 17, "columbus-blue-jackets": 29,
+    "dallas-stars": 9, "detroit-red-wings": 11, "edmonton-oilers": 22,
+    "florida-panthers": 26, "los-angeles-kings": 8, "minnesota-wild": 30,
+    "montreal-canadiens": 15, "nashville-predators": 18,
+    "new-jersey-devils": 12, "new-york-islanders": 13,
+    "new-york-rangers": 14, "ottawa-senators": 16,
+    "philadelphia-flyers": 10, "pittsburgh-penguins": 19,
+    "san-jose-sharks": 28, "seattle-kraken": 36, "st-louis-blues": 21,
+    "tampa-bay-lightning": 27, "toronto-maple-leafs": 20,
+    "utah-mammoth": 37, "vancouver-canucks": 23,
+    "vegas-golden-knights": 35, "washington-capitals": 24,
+    "winnipeg-jets": 31,
+}
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -50,9 +68,7 @@ def scrape_team(team_slug):
             .get("players", [])
     )
 
-    # Even strength groups
     ev_groups = {}
-    # Power play groups
     pp_groups = {}
 
     for p in players:
@@ -64,19 +80,15 @@ def scrape_team(team_slug):
             if group not in ev_groups:
                 ev_groups[group] = []
             ev_groups[group].append(name)
-
         elif category == "pp":
             if group not in pp_groups:
                 pp_groups[group] = []
             pp_groups[group].append(name)
-            
 
     forwards = [ev_groups[k] for k in ["f1", "f2", "f3", "f4"] if k in ev_groups and ev_groups[k]]
     defense  = [ev_groups[k] for k in ["d1", "d2", "d3"]       if k in ev_groups and ev_groups[k]]
     goalies  = [[p] for p in ev_groups.get("g", [])]
 
-    # PP units — Daily Faceoff uses groupIdentifier "f1"/"d1" within pp category
-    # so we collect all pp players in order as one flat unit per pp line
     pp1 = pp_groups.get("pp1", [])
     pp2 = pp_groups.get("pp2", [])
 
@@ -89,13 +101,86 @@ def scrape_team(team_slug):
     }
 
 
+def scrape_espn_injuries():
+    """Fetch injury data for all teams from ESPN's core API."""
+    injuries = {}
+
+    for slug, espn_id in ESPN_TEAM_IDS.items():
+        try:
+            url = (
+                f"https://sports.core.api.espn.com/v2/sports/hockey/"
+                f"leagues/nhl/teams/{espn_id}/injuries?limit=100"
+            )
+            resp = SESSION.get(url, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+
+            team_injuries = []
+            for item in data.get("items", []):
+                # Each item may have nested $ref links or inline data
+                # Try inline first, then follow $ref if needed
+                player_name = ""
+                player_pos = ""
+                status = ""
+                description = ""
+
+                # Get athlete info
+                athlete = item.get("athlete", {})
+                if "$ref" in athlete:
+                    try:
+                        ath_resp = SESSION.get(athlete["$ref"], timeout=10)
+                        ath_data = ath_resp.json()
+                        player_name = ath_data.get("displayName", "")
+                        player_pos = ath_data.get("position", {}).get("abbreviation", "")
+                    except Exception:
+                        pass
+                else:
+                    player_name = athlete.get("displayName", "")
+                    player_pos = athlete.get("position", {}).get("abbreviation", "")
+
+                # Get injury status
+                status_obj = item.get("status", "")
+                if isinstance(status_obj, str):
+                    status = status_obj
+                else:
+                    status = status_obj.get("type", {}).get("description", "") if isinstance(status_obj, dict) else ""
+
+                # Get injury description
+                inj_type = item.get("type", {})
+                if isinstance(inj_type, dict):
+                    description = inj_type.get("description", "")
+                else:
+                    description = item.get("description", "")
+
+                if player_name:
+                    team_injuries.append({
+                        "name": player_name.upper(),
+                        "pos": player_pos or "?",
+                        "status": status or "Unknown",
+                        "desc": description,
+                    })
+
+            if team_injuries:
+                injuries[slug] = team_injuries
+                print(f"  Injuries for {slug}: {len(team_injuries)} players")
+
+            time.sleep(0.3)
+
+        except Exception as e:
+            print(f"  ESPN injury fetch failed for {slug}: {e}")
+
+    return injuries
+
+
 def main():
     all_data = {
         "source":     "dailyfaceoff.com",
         "updated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-        "teams":      {}
+        "teams":      {},
+        "injuries":   {},
     }
 
+    # Scrape line combinations from Daily Faceoff
     for team in TEAMS:
         try:
             print(f"Scraping {team}...")
@@ -108,6 +193,11 @@ def main():
         except Exception as e:
             print(f"  FAILED {team}: {e}")
             all_data["teams"][team] = {"forwards": [], "defense": [], "goalies": [], "pp1": [], "pp2": []}
+
+    # Scrape injuries from ESPN
+    print("\nFetching injuries from ESPN...")
+    all_data["injuries"] = scrape_espn_injuries()
+    print(f"Injury data for {len(all_data['injuries'])} teams.")
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(all_data, f, indent=2, ensure_ascii=False)
