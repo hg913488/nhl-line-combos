@@ -19,7 +19,6 @@ TEAMS = [
     "winnipeg-jets",
 ]
 
-# ESPN team IDs mapped to our slugs
 ESPN_TEAM_IDS = {
     "anaheim-ducks": 25, "boston-bruins": 1, "buffalo-sabres": 2,
     "calgary-flames": 3, "carolina-hurricanes": 7, "chicago-blackhawks": 4,
@@ -104,6 +103,7 @@ def scrape_team(team_slug):
 def scrape_espn_injuries():
     """Fetch injury data for all teams from ESPN's core API."""
     injuries = {}
+    debug_printed = False
 
     for slug, espn_id in ESPN_TEAM_IDS.items():
         try:
@@ -115,6 +115,20 @@ def scrape_espn_injuries():
             resp.raise_for_status()
             data = resp.json()
 
+            # Debug: print raw response for first team so we can see the structure
+            if not debug_printed:
+                print(f"  DEBUG raw ESPN response for {slug}:")
+                print(f"  Keys: {list(data.keys())}")
+                items = data.get("items", [])
+                print(f"  Items count: {len(items)}")
+                if items:
+                    print(f"  First item keys: {list(items[0].keys())}")
+                    print(f"  First item: {json.dumps(items[0], indent=2)[:1000]}")
+                else:
+                    # Maybe the data is under a different key
+                    print(f"  Full response (first 1500 chars): {json.dumps(data)[:1500]}")
+                debug_printed = True
+
             team_injuries = []
             for item in data.get("items", []):
                 player_name = ""
@@ -122,17 +136,17 @@ def scrape_espn_injuries():
                 status = ""
                 description = ""
 
-                # Get athlete info
+                # Get athlete info — follow $ref if needed
                 athlete = item.get("athlete", {})
-                if "$ref" in athlete:
+                if isinstance(athlete, dict) and "$ref" in athlete:
                     try:
                         ath_resp = SESSION.get(athlete["$ref"], timeout=10)
                         ath_data = ath_resp.json()
                         player_name = ath_data.get("displayName", "")
                         player_pos = ath_data.get("position", {}).get("abbreviation", "")
-                    except Exception:
-                        pass
-                else:
+                    except Exception as e:
+                        print(f"    Failed to fetch athlete ref for {slug}: {e}")
+                elif isinstance(athlete, dict):
                     player_name = athlete.get("displayName", "")
                     player_pos = athlete.get("position", {}).get("abbreviation", "")
 
@@ -140,22 +154,31 @@ def scrape_espn_injuries():
                 status_obj = item.get("status", "")
                 if isinstance(status_obj, str):
                     status = status_obj
-                else:
-                    status = status_obj.get("type", {}).get("description", "") if isinstance(status_obj, dict) else ""
+                elif isinstance(status_obj, dict):
+                    # Could be nested: status.type.description or status.description
+                    status = (
+                        status_obj.get("type", {}).get("description", "")
+                        or status_obj.get("description", "")
+                        or status_obj.get("name", "")
+                    )
 
-                # Get injury description
+                # Get injury description / type
                 inj_type = item.get("type", {})
                 if isinstance(inj_type, dict):
-                    description = inj_type.get("description", "")
-                else:
-                    description = item.get("description", "")
+                    description = inj_type.get("description", "") or inj_type.get("name", "")
+                elif isinstance(inj_type, str):
+                    description = inj_type
+
+                # Fallback: check for longComment or shortComment
+                if not description:
+                    description = item.get("longComment", "") or item.get("shortComment", "") or item.get("details", {}).get("detail", "") if isinstance(item.get("details"), dict) else ""
 
                 if player_name:
                     team_injuries.append({
                         "name": player_name.upper(),
                         "pos": player_pos or "?",
                         "status": status or "Unknown",
-                        "desc": description,
+                        "desc": description or "",
                     })
 
             if team_injuries:
@@ -178,7 +201,6 @@ def main():
         "injuries":   {},
     }
 
-    # Scrape line combinations from Daily Faceoff
     for team in TEAMS:
         try:
             print(f"Scraping {team}...")
@@ -192,7 +214,6 @@ def main():
             print(f"  FAILED {team}: {e}")
             all_data["teams"][team] = {"forwards": [], "defense": [], "goalies": [], "pp1": [], "pp2": []}
 
-    # Scrape injuries from ESPN
     print("\nFetching injuries from ESPN...")
     all_data["injuries"] = scrape_espn_injuries()
     print(f"Injury data for {len(all_data['injuries'])} teams.")
