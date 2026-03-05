@@ -19,23 +19,6 @@ TEAMS = [
     "winnipeg-jets",
 ]
 
-ESPN_TEAM_IDS = {
-    "anaheim-ducks": 25, "boston-bruins": 1, "buffalo-sabres": 2,
-    "calgary-flames": 3, "carolina-hurricanes": 7, "chicago-blackhawks": 4,
-    "colorado-avalanche": 17, "columbus-blue-jackets": 29,
-    "dallas-stars": 9, "detroit-red-wings": 11, "edmonton-oilers": 22,
-    "florida-panthers": 26, "los-angeles-kings": 8, "minnesota-wild": 30,
-    "montreal-canadiens": 15, "nashville-predators": 18,
-    "new-jersey-devils": 12, "new-york-islanders": 13,
-    "new-york-rangers": 14, "ottawa-senators": 16,
-    "philadelphia-flyers": 10, "pittsburgh-penguins": 19,
-    "san-jose-sharks": 28, "seattle-kraken": 36, "st-louis-blues": 21,
-    "tampa-bay-lightning": 27, "toronto-maple-leafs": 20,
-    "utah-mammoth": 37, "vancouver-canucks": 23,
-    "vegas-golden-knights": 35, "washington-capitals": 24,
-    "winnipeg-jets": 31,
-}
-
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -100,12 +83,48 @@ def scrape_team(team_slug):
     }
 
 
-def scrape_espn_injuries():
+def fetch_espn_team_ids():
+    """Fetch ESPN team IDs dynamically by matching slugs from the teams endpoint."""
+    url = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams"
+    resp = SESSION.get(url, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+
+    espn_map = {}
+    for sport in data.get("sports", []):
+        for league in sport.get("leagues", []):
+            for team_entry in league.get("teams", []):
+                t = team_entry.get("team", {})
+                espn_slug = t.get("slug", "")
+                espn_id = t.get("id", "")
+                if espn_slug and espn_id:
+                    espn_map[espn_slug] = int(espn_id)
+
+    # Map our slugs to ESPN IDs
+    slug_to_espn = {}
+    for slug in TEAMS:
+        if slug in espn_map:
+            slug_to_espn[slug] = espn_map[slug]
+        else:
+            # Try partial match
+            for espn_slug, espn_id in espn_map.items():
+                if slug.replace("-", "") in espn_slug.replace("-", "") or espn_slug.replace("-", "") in slug.replace("-", ""):
+                    slug_to_espn[slug] = espn_id
+                    break
+
+    print(f"  Matched {len(slug_to_espn)}/{len(TEAMS)} teams to ESPN IDs")
+    for slug in TEAMS:
+        if slug not in slug_to_espn:
+            print(f"  WARNING: No ESPN match for {slug}")
+
+    return slug_to_espn
+
+
+def scrape_espn_injuries(espn_team_ids):
     """Fetch injury data for all teams from ESPN's core API."""
     injuries = {}
-    debug_printed = False
 
-    for slug, espn_id in ESPN_TEAM_IDS.items():
+    for slug, espn_id in espn_team_ids.items():
         try:
             url = (
                 f"https://sports.core.api.espn.com/v2/sports/hockey/"
@@ -117,7 +136,6 @@ def scrape_espn_injuries():
 
             team_injuries = []
             for item in data.get("items", []):
-                # Each item is a $ref link — follow it to get the full injury object
                 ref_url = item.get("$ref", "")
                 if not ref_url:
                     continue
@@ -128,13 +146,6 @@ def scrape_espn_injuries():
                 except Exception as e:
                     print(f"    Failed to fetch injury ref for {slug}: {e}")
                     continue
-
-                # Debug: print first injury object so we can see full structure
-                if not debug_printed:
-                    print(f"  DEBUG first injury object for {slug}:")
-                    print(f"  Keys: {list(inj_data.keys())}")
-                    print(f"  {json.dumps(inj_data, indent=2)[:2000]}")
-                    debug_printed = True
 
                 # Extract player name
                 player_name = ""
@@ -223,8 +234,13 @@ def main():
             print(f"  FAILED {team}: {e}")
             all_data["teams"][team] = {"forwards": [], "defense": [], "goalies": [], "pp1": [], "pp2": []}
 
+    # Fetch ESPN team ID mapping dynamically
+    print("\nFetching ESPN team IDs...")
+    espn_team_ids = fetch_espn_team_ids()
+
+    # Scrape injuries
     print("\nFetching injuries from ESPN...")
-    all_data["injuries"] = scrape_espn_injuries()
+    all_data["injuries"] = scrape_espn_injuries(espn_team_ids)
     print(f"Injury data for {len(all_data['injuries'])} teams.")
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
