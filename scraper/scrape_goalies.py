@@ -19,20 +19,6 @@ SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
 
 
-def name_to_slug(name):
-    """Convert a team display name to our slug format."""
-    overrides = {
-        "Vegas Golden Knights": "vegas-golden-knights",
-        "Utah Mammoth": "utah-mammoth",
-        "Montréal Canadiens": "montreal-canadiens",
-        "Montreal Canadiens": "montreal-canadiens",
-        "St. Louis Blues": "st-louis-blues",
-    }
-    if name in overrides:
-        return overrides[name]
-    return name.lower().replace(" ", "-").replace(".", "")
-
-
 def scrape_starting_goalies():
     """Scrape today's starting goalies from DailyFaceoff."""
     url = "https://www.dailyfaceoff.com/starting-goalies"
@@ -47,107 +33,57 @@ def scrape_starting_goalies():
 
     raw = json.loads(script.string)
     page_props = raw.get("props", {}).get("pageProps", {})
-
-    # pageProps.data is a list of game objects
     games = page_props.get("data", [])
+
     if not isinstance(games, list):
         print(f"  Unexpected data type: {type(games)}")
-        print(f"  DEBUG: {json.dumps(page_props)[:2000]}")
         return []
 
     print(f"  Found {len(games)} games")
 
-    # Debug: print first game structure
-    if games:
-        print(f"  First game keys: {list(games[0].keys())}")
-        print(f"  First game (first 1500 chars): {json.dumps(games[0])[:1500]}")
-
     matchups = []
     for game in games:
         try:
-            # Extract team and goalie info — adapt keys based on debug output
-            away_team_name = (
-                game.get("awayTeam", {}).get("name", "")
-                or game.get("awayTeamName", "")
-                or game.get("away_team", "")
-                or ""
-            )
-            home_team_name = (
-                game.get("homeTeam", {}).get("name", "")
-                or game.get("homeTeamName", "")
-                or game.get("home_team", "")
-                or ""
-            )
-
-            # Try multiple possible structures for goalie data
-            away_goalie = (
-                game.get("awayGoalie", {})
-                or game.get("awayStarter", {})
-                or game.get("away_goalie", {})
-                or {}
-            )
-            home_goalie = (
-                game.get("homeGoalie", {})
-                or game.get("homeStarter", {})
-                or game.get("home_goalie", {})
-                or {}
-            )
-
-            if isinstance(away_goalie, str):
-                away_goalie = {"name": away_goalie}
-            if isinstance(home_goalie, str):
-                home_goalie = {"name": home_goalie}
-
-            def extract_goalie(g):
-                if not g:
-                    return {"goalie": "", "status": "Unconfirmed", "stats": {}}
-                name = (
-                    g.get("name", "")
-                    or g.get("playerName", "")
-                    or g.get("displayName", "")
-                    or ""
-                )
-                status = (
-                    g.get("status", "")
-                    or g.get("confirmation", "")
-                    or g.get("confirmedStatus", "")
-                    or "Unconfirmed"
-                )
-                stats = {}
-                # Try to get stats from various possible keys
-                for k in ["record", "wlt", "w_l_otl"]:
-                    if g.get(k):
-                        stats["record"] = g[k]
-                        break
-                for k in ["gaa", "goalsAgainstAverage"]:
-                    if g.get(k):
-                        stats["gaa"] = str(g[k])
-                        break
-                for k in ["savePct", "svPct", "savePercentage", "sv_pct"]:
-                    if g.get(k):
-                        stats["svpct"] = str(g[k])
-                        break
-                return {
-                    "goalie": name.upper(),
-                    "status": status,
-                    "stats": stats,
-                }
-
-            away_slug = name_to_slug(away_team_name) if away_team_name else ""
-            home_slug = name_to_slug(home_team_name) if home_team_name else ""
+            # Build W-L-OTL record string
+            def make_record(prefix):
+                w = game.get(f"{prefix}GoalieWins", "")
+                l = game.get(f"{prefix}GoalieLosses", "")
+                otl = game.get(f"{prefix}GoalieOvertimeLosses", "")
+                if w != "" and l != "":
+                    return f"{w}-{l}-{otl}" if otl != "" else f"{w}-{l}"
+                return ""
 
             matchup = {
                 "away": {
-                    "team": away_slug,
-                    **extract_goalie(away_goalie),
+                    "team": game.get("awayTeamSlug", ""),
+                    "goalie": (game.get("awayGoalieName", "") or "").upper(),
+                    "status": game.get("awayNewsStrengthName", "") or "Unconfirmed",
+                    "headshotUrl": game.get("awayGoalieHeadshotUrl", ""),
+                    "stats": {
+                        "record": make_record("away"),
+                        "gaa": str(game.get("awayGoalieGoalsAgainstAvg", "")) if game.get("awayGoalieGoalsAgainstAvg") else "",
+                        "svpct": str(game.get("awayGoalieSavePercentage", "")) if game.get("awayGoalieSavePercentage") else "",
+                        "so": game.get("awayGoalieShutouts", ""),
+                    },
                 },
                 "home": {
-                    "team": home_slug,
-                    **extract_goalie(home_goalie),
+                    "team": game.get("homeTeamSlug", ""),
+                    "goalie": (game.get("homeGoalieName", "") or "").upper(),
+                    "status": game.get("homeNewsStrengthName", "") or "Unconfirmed",
+                    "headshotUrl": game.get("homeGoalieHeadshotUrl", ""),
+                    "stats": {
+                        "record": make_record("home"),
+                        "gaa": str(game.get("homeGoalieGoalsAgainstAvg", "")) if game.get("homeGoalieGoalsAgainstAvg") else "",
+                        "svpct": str(game.get("homeGoalieSavePercentage", "")) if game.get("homeGoalieSavePercentage") else "",
+                        "so": game.get("homeGoalieShutouts", ""),
+                    },
                 },
+                "date": game.get("date", ""),
+                "time": game.get("time", ""),
             }
+
             matchups.append(matchup)
-            print(f"  {away_slug} @ {home_slug}: "
+            print(f"  {matchup['away']['team']} @ {matchup['home']['team']}: "
                   f"{matchup['away']['goalie']} ({matchup['away']['status']}) vs "
                   f"{matchup['home']['goalie']} ({matchup['home']['status']})")
 
