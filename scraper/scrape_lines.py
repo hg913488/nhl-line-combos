@@ -3,21 +3,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-OUTPUT_PATH = "data/lines.json"
-
-TEAMS = [
-    "anaheim-ducks", "boston-bruins", "buffalo-sabres", "calgary-flames",
-    "carolina-hurricanes", "chicago-blackhawks", "colorado-avalanche",
-    "columbus-blue-jackets", "dallas-stars", "detroit-red-wings",
-    "edmonton-oilers", "florida-panthers", "los-angeles-kings",
-    "minnesota-wild", "montreal-canadiens", "nashville-predators",
-    "new-jersey-devils", "new-york-islanders", "new-york-rangers",
-    "ottawa-senators", "philadelphia-flyers", "pittsburgh-penguins",
-    "san-jose-sharks", "seattle-kraken", "st-louis-blues",
-    "tampa-bay-lightning", "toronto-maple-leafs", "utah-mammoth",
-    "vancouver-canucks", "vegas-golden-knights", "washington-capitals",
-    "winnipeg-jets",
-]
+OUTPUT_PATH = "data/goalies.json"
 
 HEADERS = {
     "User-Agent": (
@@ -29,225 +15,159 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.5",
 }
 
+# Map DailyFaceoff team names/slugs to our app slugs
+TEAM_SLUG_MAP = {
+    "anaheim-ducks": "anaheim-ducks",
+    "boston-bruins": "boston-bruins",
+    "buffalo-sabres": "buffalo-sabres",
+    "calgary-flames": "calgary-flames",
+    "carolina-hurricanes": "carolina-hurricanes",
+    "chicago-blackhawks": "chicago-blackhawks",
+    "colorado-avalanche": "colorado-avalanche",
+    "columbus-blue-jackets": "columbus-blue-jackets",
+    "dallas-stars": "dallas-stars",
+    "detroit-red-wings": "detroit-red-wings",
+    "edmonton-oilers": "edmonton-oilers",
+    "florida-panthers": "florida-panthers",
+    "los-angeles-kings": "los-angeles-kings",
+    "minnesota-wild": "minnesota-wild",
+    "montreal-canadiens": "montreal-canadiens",
+    "nashville-predators": "nashville-predators",
+    "new-jersey-devils": "new-jersey-devils",
+    "new-york-islanders": "new-york-islanders",
+    "new-york-rangers": "new-york-rangers",
+    "ottawa-senators": "ottawa-senators",
+    "philadelphia-flyers": "philadelphia-flyers",
+    "pittsburgh-penguins": "pittsburgh-penguins",
+    "san-jose-sharks": "san-jose-sharks",
+    "seattle-kraken": "seattle-kraken",
+    "st-louis-blues": "st-louis-blues",
+    "tampa-bay-lightning": "tampa-bay-lightning",
+    "toronto-maple-leafs": "toronto-maple-leafs",
+    "utah-mammoth": "utah-mammoth",
+    "vancouver-canucks": "vancouver-canucks",
+    "vegas-golden-knights": "vegas-golden-knights",
+    "washington-capitals": "washington-capitals",
+    "winnipeg-jets": "winnipeg-jets",
+}
+
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
 
 
-def scrape_team(team_slug):
-    url = f"https://www.dailyfaceoff.com/teams/{team_slug}/line-combinations"
+def name_to_slug(name):
+    """Convert a team display name to our slug format."""
+    overrides = {
+        "Vegas Golden Knights": "vegas-golden-knights",
+        "Utah Mammoth": "utah-mammoth",
+        "Montréal Canadiens": "montreal-canadiens",
+        "Montreal Canadiens": "montreal-canadiens",
+    }
+    if name in overrides:
+        return overrides[name]
+    return name.lower().replace(" ", "-").replace(".", "")
+
+
+def scrape_starting_goalies():
+    """Scrape today's starting goalies from DailyFaceoff."""
+    url = "https://www.dailyfaceoff.com/starting-goalies"
     resp = SESSION.get(url, timeout=15)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
+
     script = soup.find("script", id="__NEXT_DATA__")
     if not script:
-        return {"forwards": [], "defense": [], "goalies": [], "pp1": [], "pp2": []}
+        print("  No __NEXT_DATA__ found, falling back to HTML parsing")
+        return parse_goalies_html(soup)
 
     data = json.loads(script.string)
-    players = (
-        data.get("props", {})
-            .get("pageProps", {})
-            .get("combinations", {})
-            .get("players", [])
+    page_props = data.get("props", {}).get("pageProps", {})
+
+    # Debug: print available keys
+    print(f"  pageProps keys: {list(page_props.keys())}")
+
+    # Try to find the games/matchups data
+    games = (
+        page_props.get("games", [])
+        or page_props.get("matchups", [])
+        or page_props.get("goalieMatchups", [])
+        or page_props.get("data", {}).get("games", [])
+        or []
     )
 
-    ev_groups = {}
-    pp_groups = {}
+    if not games:
+        # Print first 2000 chars to debug structure
+        print(f"  DEBUG pageProps (first 2000 chars): {json.dumps(page_props)[:2000]}")
+        print("  No games found in __NEXT_DATA__, falling back to HTML parsing")
+        return parse_goalies_html(soup)
 
-    for p in players:
-        category = p.get("categoryIdentifier", "")
-        group = p.get("groupIdentifier", "")
-        name = p.get("name", "").upper()
+    print(f"  Found {len(games)} games in __NEXT_DATA__")
 
-        if category == "ev":
-            if group not in ev_groups:
-                ev_groups[group] = []
-            ev_groups[group].append(name)
-        elif category == "pp":
-            if group not in pp_groups:
-                pp_groups[group] = []
-            pp_groups[group].append(name)
-
-    forwards = [ev_groups[k] for k in ["f1", "f2", "f3", "f4"] if k in ev_groups and ev_groups[k]]
-    defense  = [ev_groups[k] for k in ["d1", "d2", "d3"]       if k in ev_groups and ev_groups[k]]
-    goalies  = [[p] for p in ev_groups.get("g", [])]
-
-    pp1 = pp_groups.get("pp1", [])
-    pp2 = pp_groups.get("pp2", [])
-
-    return {
-        "forwards": forwards,
-        "defense":  defense,
-        "goalies":  goalies,
-        "pp1":      pp1,
-        "pp2":      pp2,
-    }
-
-
-def fetch_espn_team_ids():
-    """Fetch ESPN team IDs dynamically by matching slugs from the teams endpoint."""
-    url = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams"
-    resp = SESSION.get(url, timeout=15)
-    resp.raise_for_status()
-    data = resp.json()
-
-    espn_map = {}
-    for sport in data.get("sports", []):
-        for league in sport.get("leagues", []):
-            for team_entry in league.get("teams", []):
-                t = team_entry.get("team", {})
-                espn_slug = t.get("slug", "")
-                espn_id = t.get("id", "")
-                if espn_slug and espn_id:
-                    espn_map[espn_slug] = int(espn_id)
-
-    # Map our slugs to ESPN IDs
-    slug_to_espn = {}
-    for slug in TEAMS:
-        if slug in espn_map:
-            slug_to_espn[slug] = espn_map[slug]
-        else:
-            # Try partial match
-            for espn_slug, espn_id in espn_map.items():
-                if slug.replace("-", "") in espn_slug.replace("-", "") or espn_slug.replace("-", "") in slug.replace("-", ""):
-                    slug_to_espn[slug] = espn_id
-                    break
-
-    print(f"  Matched {len(slug_to_espn)}/{len(TEAMS)} teams to ESPN IDs")
-    for slug in TEAMS:
-        if slug not in slug_to_espn:
-            print(f"  WARNING: No ESPN match for {slug}")
-
-    return slug_to_espn
-
-
-def scrape_espn_injuries(espn_team_ids):
-    """Fetch injury data for all teams from ESPN's core API."""
-    injuries = {}
-
-    for slug, espn_id in espn_team_ids.items():
+    matchups = []
+    for game in games:
         try:
-            url = (
-                f"https://sports.core.api.espn.com/v2/sports/hockey/"
-                f"leagues/nhl/teams/{espn_id}/injuries?limit=100"
-            )
-            resp = SESSION.get(url, timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
+            away_team = game.get("awayTeam", {})
+            home_team = game.get("homeTeam", {})
+            away_goalie = game.get("awayGoalie", {}) or game.get("awayStarter", {})
+            home_goalie = game.get("homeGoalie", {}) or game.get("homeStarter", {})
 
-            team_injuries = []
-            for item in data.get("items", []):
-                ref_url = item.get("$ref", "")
-                if not ref_url:
-                    continue
-
-                try:
-                    inj_resp = SESSION.get(ref_url, timeout=10)
-                    inj_data = inj_resp.json()
-                except Exception as e:
-                    print(f"    Failed to fetch injury ref for {slug}: {e}")
-                    continue
-
-                # Extract player name
-                player_name = ""
-                player_pos = ""
-                athlete = inj_data.get("athlete", {})
-                if isinstance(athlete, dict):
-                    if "$ref" in athlete:
-                        try:
-                            ath_resp = SESSION.get(athlete["$ref"], timeout=10)
-                            ath_data = ath_resp.json()
-                            player_name = ath_data.get("displayName", "")
-                            player_pos = ath_data.get("position", {}).get("abbreviation", "")
-                        except Exception:
-                            pass
-                    else:
-                        player_name = athlete.get("displayName", "")
-                        player_pos = athlete.get("position", {}).get("abbreviation", "")
-
-                # Extract status
-                status = ""
-                status_obj = inj_data.get("status", "")
-                if isinstance(status_obj, str):
-                    status = status_obj
-                elif isinstance(status_obj, dict):
-                    status = (
-                        status_obj.get("type", {}).get("description", "")
-                        or status_obj.get("description", "")
-                        or status_obj.get("name", "")
-                    )
-
-                # Extract injury description
-                description = ""
-                inj_type = inj_data.get("type", {})
-                if isinstance(inj_type, dict):
-                    description = inj_type.get("description", "") or inj_type.get("name", "")
-                elif isinstance(inj_type, str):
-                    description = inj_type
-
-                if not description:
-                    description = (
-                        inj_data.get("longComment", "")
-                        or inj_data.get("shortComment", "")
-                        or inj_data.get("description", "")
-                    )
-
-                if player_name:
-                    team_injuries.append({
-                        "name": player_name.upper(),
-                        "pos": player_pos or "?",
-                        "status": status or "Unknown",
-                        "desc": description or "",
-                    })
-
-                time.sleep(0.1)
-
-            if team_injuries:
-                injuries[slug] = team_injuries
-                print(f"  Injuries for {slug}: {len(team_injuries)} players")
-
-            time.sleep(0.3)
-
+            matchup = {
+                "away": {
+                    "team": name_to_slug(away_team.get("name", "") or away_team.get("teamName", "")),
+                    "goalie": (away_goalie.get("name", "") or away_goalie.get("playerName", "")).upper(),
+                    "status": away_goalie.get("status", "") or away_goalie.get("confirmation", "Unconfirmed"),
+                    "stats": {
+                        "record": away_goalie.get("record", ""),
+                        "gaa": away_goalie.get("gaa", ""),
+                        "svpct": away_goalie.get("savePct", "") or away_goalie.get("svPct", ""),
+                    },
+                },
+                "home": {
+                    "team": name_to_slug(home_team.get("name", "") or home_team.get("teamName", "")),
+                    "goalie": (home_goalie.get("name", "") or home_goalie.get("playerName", "")).upper(),
+                    "status": home_goalie.get("status", "") or home_goalie.get("confirmation", "Unconfirmed"),
+                    "stats": {
+                        "record": home_goalie.get("record", ""),
+                        "gaa": home_goalie.get("gaa", ""),
+                        "svpct": home_goalie.get("savePct", "") or home_goalie.get("svPct", ""),
+                    },
+                },
+            }
+            matchups.append(matchup)
         except Exception as e:
-            print(f"  ESPN injury fetch failed for {slug}: {e}")
+            print(f"    Error parsing game: {e}")
 
-    return injuries
+    return matchups
+
+
+def parse_goalies_html(soup):
+    """Fallback: parse starting goalies from the rendered HTML."""
+    matchups = []
+
+    # Look for matchup sections — each game has away @ home with goalie info
+    # The HTML structure shows team names and goalie names in specific patterns
+    text = soup.get_text()
+
+    # Simple pattern: find all "Team A at Team B" blocks
+    # This is a rough fallback — the __NEXT_DATA__ approach is preferred
+    print("  HTML fallback parsing not fully implemented — check __NEXT_DATA__ debug output")
+    return matchups
 
 
 def main():
-    all_data = {
-        "source":     "dailyfaceoff.com",
+    print("Fetching starting goalies from DailyFaceoff...")
+    matchups = scrape_starting_goalies()
+
+    output = {
+        "source": "dailyfaceoff.com",
         "updated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-        "teams":      {},
-        "injuries":   {},
+        "matchups": matchups,
     }
 
-    for team in TEAMS:
-        try:
-            print(f"Scraping {team}...")
-            data = scrape_team(team)
-            all_data["teams"][team] = data
-            print(f"  -> {len(data['forwards'])} fwd lines, {len(data['defense'])} def pairs, "
-                  f"{len(data['goalies'])} goalies, "
-                  f"PP1: {len(data['pp1'])} players, PP2: {len(data['pp2'])} players")
-            time.sleep(1)
-        except Exception as e:
-            print(f"  FAILED {team}: {e}")
-            all_data["teams"][team] = {"forwards": [], "defense": [], "goalies": [], "pp1": [], "pp2": []}
-
-    # Fetch ESPN team ID mapping dynamically
-    print("\nFetching ESPN team IDs...")
-    espn_team_ids = fetch_espn_team_ids()
-
-    # Scrape injuries
-    print("\nFetching injuries from ESPN...")
-    all_data["injuries"] = scrape_espn_injuries(espn_team_ids)
-    print(f"Injury data for {len(all_data['injuries'])} teams.")
-
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(all_data, f, indent=2, ensure_ascii=False)
+        json.dump(output, f, indent=2, ensure_ascii=False)
 
-    populated = sum(1 for t in all_data["teams"].values() if t["forwards"])
-    print(f"\nDone - {populated}/{len(TEAMS)} teams have forward data.")
+    print(f"Done — {len(matchups)} matchups saved to {OUTPUT_PATH}")
 
 
 if __name__ == "__main__":
