@@ -2,10 +2,12 @@ name: Update NHL Line Combos
 
 on:
   schedule:
-    - cron: '0 14 * * *'   # 9am ET  — overnight changes
+    - cron: '0 14 * * *'   # 9am ET  — overnight changes (lines + injuries + goalies)
+    - cron: '0 15 * * *'   # 10am ET — early goalie projections
+    - cron: '0 18 * * *'   # 1pm ET  — post morning skate goalies
     - cron: '0 19 * * *'   # 2pm ET  — post-morning skate lines
     - cron: '0 22 * * *'   # 5pm ET  — final check before games start
-  workflow_dispatch:        # allows manual trigger from GitHub Actions tab
+  workflow_dispatch:
 
 jobs:
   scrape-and-deploy:
@@ -23,19 +25,23 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper
+      - name: Run lineup scraper
         run: python scraper/scrape_lines.py
 
-      - name: Push lines.json to app repo
+      - name: Run goalie scraper
+        run: python scraper/scrape_goalies.py
+
+      - name: Push data to app repo
         env:
           APP_REPO_TOKEN: ${{ secrets.APP_REPO_TOKEN }}
         run: |
           git clone https://x-access-token:${APP_REPO_TOKEN}@github.com/hg913488/nhl-line-combos-app.git app-repo
           mkdir -p app-repo/data
           cp data/lines.json app-repo/data/lines.json
+          cp data/goalies.json app-repo/data/goalies.json
           cd app-repo
           git config user.email "scraper@bot"
           git config user.name "Scraper Bot"
-          git add data/lines.json
+          git add data/lines.json data/goalies.json
           git commit -m "Update lineups $(date +%F)" --allow-empty
           git push
