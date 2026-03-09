@@ -1,0 +1,47 @@
+name: Update Goals Against by Position
+
+on:
+  schedule:
+    # Run once daily at 10am ET (15:00 UTC) — after most games are final
+    - cron: '0 15 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-goals-against:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout scraper repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run goals against scraper
+        run: python scrape_goals_against.py
+
+      - name: Push to app repo
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
+        run: |
+          # Clone the app repo
+          git clone https://x-access-token:${API_TOKEN_GITHUB}@github.com/${{ github.repository_owner }}/nhl-line-combos-app.git app-repo
+
+          # Ensure data directory exists
+          mkdir -p app-repo/data
+
+          # Copy the generated JSON
+          cp data/goals_against_by_position.json app-repo/data/
+
+          # Commit and push
+          cd app-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/goals_against_by_position.json
+          git commit --allow-empty -m "Update goals against by position data"
+          git push
