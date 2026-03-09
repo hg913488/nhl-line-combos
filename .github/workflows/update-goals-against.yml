@@ -27,7 +27,7 @@ jobs:
 
       - name: Push to app repo
         env:
-          API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
+          API_TOKEN_GITHUB: ${{ secrets.APP_REPO_TOKEN }}
         run: |
           # Clone the app repo
           git clone https://x-access-token:${API_TOKEN_GITHUB}@github.com/${{ github.repository_owner }}/nhl-line-combos-app.git app-repo
