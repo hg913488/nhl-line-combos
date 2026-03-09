@@ -23,7 +23,7 @@ jobs:
         run: pip install requests
 
       - name: Run goals against scraper
-        run: python scrape_goals_against.py
+        run: python scraper/scrape_goals_against.py
 
       - name: Push to app repo
         env:
