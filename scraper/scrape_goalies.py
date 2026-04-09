@@ -18,12 +18,29 @@ HEADERS = {
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
 
+MAX_RETRIES = 3
+RETRY_DELAY = 15  # seconds between retries
+
 
 def scrape_starting_goalies():
     """Scrape today's starting goalies from DailyFaceoff."""
     url = "https://www.dailyfaceoff.com/starting-goalies"
-    resp = SESSION.get(url, timeout=15)
-    resp.raise_for_status()
+
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            if attempt > 1:
+                print(f"  Retry {attempt}/{MAX_RETRIES} after {RETRY_DELAY}s...")
+                time.sleep(RETRY_DELAY)
+            resp = SESSION.get(url, timeout=30)
+            resp.raise_for_status()
+            break
+        except requests.exceptions.RequestException as e:
+            last_error = e
+            print(f"  Attempt {attempt} failed: {e}")
+    else:
+        raise last_error
+
     soup = BeautifulSoup(resp.text, "html.parser")
 
     script = soup.find("script", id="__NEXT_DATA__")
