@@ -31,6 +31,9 @@ jobs:
       - name: Run goalie scraper
         run: python scraper/scrape_goalies.py
 
+      - name: Run playoff bracket scraper
+        run: python scraper/scrape_playoff_bracket.py
+
       - name: Push data to app repo
         env:
           APP_REPO_TOKEN: ${{ secrets.APP_REPO_TOKEN }}
@@ -39,9 +42,10 @@ jobs:
           mkdir -p app-repo/data
           cp data/lines.json app-repo/data/lines.json
           cp data/goalies.json app-repo/data/goalies.json
+          cp data/playoff_bracket.json app-repo/data/playoff_bracket.json
           cd app-repo
           git config user.email "scraper@bot"
           git config user.name "Scraper Bot"
-          git add data/lines.json data/goalies.json
+          git add data/lines.json data/goalies.json data/playoff_bracket.json
           git commit -m "Update lineups $(date +%F)" --allow-empty
           git push
