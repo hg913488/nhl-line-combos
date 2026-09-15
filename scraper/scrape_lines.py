@@ -1,5 +1,6 @@
 import json
 import time
+from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 
@@ -115,12 +116,16 @@ def fetch_espn_team_ids():
         if slug not in slug_to_espn:
             print(f"  WARNING: No ESPN match for {slug}")
 
+    if set(slug_to_espn) != set(TEAMS):
+        raise ValueError("Incomplete ESPN team mapping")
+
     return slug_to_espn
 
 
 def scrape_espn_injuries(espn_team_ids):
     """Fetch injury data for all teams from ESPN's core API."""
     injuries = {}
+    failed = False
 
     for slug, espn_id in espn_team_ids.items():
         try:
@@ -131,18 +136,24 @@ def scrape_espn_injuries(espn_team_ids):
             resp = SESSION.get(url, timeout=15)
             resp.raise_for_status()
             data = resp.json()
+            if not isinstance(data.get("items"), list):
+                raise ValueError("Invalid ESPN injury response")
+            if data.get("count", len(data["items"])) > len(data["items"]):
+                raise ValueError("Incomplete ESPN injury response")
 
             team_injuries = []
             for item in data.get("items", []):
                 ref_url = item.get("$ref", "")
                 if not ref_url:
-                    continue
+                    raise ValueError("Missing ESPN injury reference")
 
                 try:
                     inj_resp = SESSION.get(ref_url, timeout=10)
+                    inj_resp.raise_for_status()
                     inj_data = inj_resp.json()
                 except Exception as e:
                     print(f"    Failed to fetch injury ref for {slug}: {e}")
+                    failed = True
                     continue
 
                 player_name = ""
@@ -152,11 +163,12 @@ def scrape_espn_injuries(espn_team_ids):
                     if "$ref" in athlete:
                         try:
                             ath_resp = SESSION.get(athlete["$ref"], timeout=10)
+                            ath_resp.raise_for_status()
                             ath_data = ath_resp.json()
                             player_name = ath_data.get("displayName", "")
                             player_pos = ath_data.get("position", {}).get("abbreviation", "")
                         except Exception:
-                            pass
+                            failed = True
                     else:
                         player_name = athlete.get("displayName", "")
                         player_pos = athlete.get("position", {}).get("abbreviation", "")
@@ -193,6 +205,8 @@ def scrape_espn_injuries(espn_team_ids):
                         "status": status or "Unknown",
                         "desc": description or "",
                     })
+                else:
+                    failed = True
 
                 time.sleep(0.1)
 
@@ -204,11 +218,21 @@ def scrape_espn_injuries(espn_team_ids):
 
         except Exception as e:
             print(f"  ESPN injury fetch failed for {slug}: {e}")
+            failed = True
 
+    if failed:
+        raise ValueError("ESPN injury refresh was incomplete")
     return injuries
 
 
 def main():
+    try:
+        previous = json.loads(Path(OUTPUT_PATH).read_text(encoding="utf-8"))
+        if not isinstance(previous, dict):
+            previous = {}
+    except (OSError, ValueError):
+        previous = {}
+
     all_data = {
         "source":     "dailyfaceoff.com",
         "updated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
@@ -229,11 +253,26 @@ def main():
             print(f"  FAILED {team}: {e}")
             all_data["teams"][team] = {"forwards": [], "defense": [], "goalies": [], "pp1": [], "pp2": []}
 
-    print("\nFetching ESPN team IDs...")
-    espn_team_ids = fetch_espn_team_ids()
-
-    print("\nFetching injuries from ESPN...")
-    all_data["injuries"] = scrape_espn_injuries(espn_team_ids)
+    try:
+        print("\nFetching ESPN team IDs...")
+        espn_team_ids = fetch_espn_team_ids()
+        print("\nFetching injuries from ESPN...")
+        all_data["injuries"] = scrape_espn_injuries(espn_team_ids)
+        all_data["injuries_meta"] = {
+            "source": "espn.com", "status": "fresh",
+            "updated_at": all_data["updated_at"],
+        }
+    except Exception as e:
+        saved = previous.get("injuries")
+        all_data["injuries"] = saved if isinstance(saved, dict) else {}
+        # Legacy snapshots did not record a separate injury refresh timestamp.
+        meta = previous.get("injuries_meta") or {}
+        all_data["injuries_meta"] = {
+            "source": "espn.com",
+            "status": "stale" if isinstance(saved, dict) else "unavailable",
+            "updated_at": meta.get("updated_at"),
+        }
+        print(f"::warning::Injuries could not refresh; preserving prior data: {e}")
     print(f"Injury data for {len(all_data['injuries'])} teams.")
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
